@@ -1,10 +1,11 @@
-# ros2_follow_me_ws (scaffold)
-Minimal ROS 2 workspace scaffold for your Sphero RVR + RPLIDAR + vision follower project.
+# FollowBot
+A robot that can follow you around, based on ROS 2 Humble, Nav2, Sphero RVR, and RPLIDAR
 
 ## Contents
 - `rvr_ros/`        – Rust: base driver skeleton (cmd_vel subscriber)
 - `leg_detector/`   – Rust: LaserScan subscriber publishing legs (PoseArray) – placeholder logic
 - `bringup/`        – Launch files to bring up RVR + RPLIDAR + leg detector (+ optional Foxglove bridge)
+- `tracker_fuser/`  – Rust: Fuses leg detections with RPLIDAR scans to create a `PoseArray` of detected legs
 - `foxglove_layouts/` – Foxglove Studio dashboard layout JSON
 
 ## Build (colcon) – placeholder

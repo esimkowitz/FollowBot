@@ -1,0 +1,14 @@
+[package]
+name = "tracker_fuser_rust"
+version = "0.1.0"
+edition = "2021"
+[dependencies]
+anyhow = "1"
+rclrs = "0.3"
+# Uncomment once Rust action/message crates are generated in your workspace:
+# geometry_msgs = { path = "" }
+# nav2_msgs = { path = "" }
+# rclrs_action = "0.3"
+[[bin]]
+name = "tracker_fuser_rust_node"
+path = "src/main.rs"
