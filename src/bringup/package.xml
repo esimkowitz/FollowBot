@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>bringup</name>
+  <version>0.0.1</version>
+  <description>Launch files for RVR + RPLIDAR + leg detector + Foxglove bridge</description>
+  <maintainer email="esimkowitz@users.noreply.github.com">Evan Simkowitz</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <exec_depend>rplidar_ros</exec_depend>
+  <exec_depend>rvr_ros</exec_depend>
+  <exec_depend>leg_detector</exec_depend>
+  <exec_depend>foxglove_bridge</exec_depend>
+  <exec_depend>ros2launch</exec_depend>
+</package>

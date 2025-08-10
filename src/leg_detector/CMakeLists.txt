@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.10)
+project(leg_detector)
+find_package(ament_cmake REQUIRED)
+find_package(ament_cargo REQUIRED)
+ament_cargo_build()
+ament_package()

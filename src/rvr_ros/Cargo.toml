@@ -1,0 +1,16 @@
+[package]
+name = "rvr_ros"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+rclrs = "0.3"
+
+[lib]
+name = "rvr_ros_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rvr_ros_node"
+path = "src/main.rs"

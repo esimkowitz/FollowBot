@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>tracker_fuser</name>
+  <version>0.0.1</version>
+  <description>Fuse leg detections and drive Nav2 toward a moving target.</description>
+  <maintainer email="esimkowitz@users.noreply.github.com">Evan Simkowitz</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav2_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+</package>

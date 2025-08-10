@@ -1,0 +1,84 @@
+amcl:
+  ros__parameters:
+    use_sim_time: false
+bt_navigator:
+  ros__parameters:
+    use_sim_time: false
+    default_bt_xml_filename: /opt/ros/humble/share/nav2_bt_navigator/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml
+controller_server:
+  ros__parameters:
+    use_sim_time: false
+    controller_plugins: ["FollowPath"]
+    FollowPath:
+      plugin: "nav2_regulated_pure_pursuit_controller/RegulatedPurePursuitController"
+      desired_linear_vel: 0.6
+      max_linear_accel: 1.0
+      lookahead_dist: 0.6
+      min_lookahead_dist: 0.3
+      max_lookahead_dist: 1.0
+      use_velocity_scaled_lookahead_dist: true
+      transform_tolerance: 0.2
+      regulate_min_approach_velocity: true
+      use_approach_linear_velocity_scaling: true
+      approach_velocity_scaling_dist: 0.6
+planner_server:
+  ros__parameters:
+    use_sim_time: false
+    planner_plugins: ["GridBased"]
+    GridBased:
+      plugin: "nav2_smac_planner/SmacPlanner2D"
+      tolerance: 0.25
+      downsample_costmap: true
+      downsampling_factor: 2
+      allow_unknown: true
+      max_iterations: 2000
+behavior_server:
+  ros__parameters:
+    use_sim_time: false
+waypoint_follower:
+  ros__parameters:
+    use_sim_time: false
+nav2_controller:
+  ros__parameters:
+    use_sim_time: false
+map_server:
+  ros__parameters:
+    use_sim_time: false
+    yaml_filename: ""
+costmap_common_params: &costmap_common_params
+  footprint: [[0.10, 0.11], [0.10, -0.11], [-0.10, -0.11], [-0.10, 0.11]]
+  footprint_padding: 0.01
+  robot_base_frame: base_link
+  transform_tolerance: 0.2
+  update_frequency: 10.0
+  publish_frequency: 5.0
+  resolution: 0.05
+  obstacle_layer:
+    plugin: "nav2_costmap_2d::ObstacleLayer"
+    observation_sources: scan
+    scan:
+      topic: /scan
+      max_obstacle_height: 2.0
+      clearing: true
+      marking: true
+      data_type: "LaserScan"
+      inf_is_valid: true
+  inflation_layer:
+    plugin: "nav2_costmap_2d::InflationLayer"
+    cost_scaling_factor: 3.5
+    inflation_radius: 0.55
+local_costmap:
+  ros__parameters:
+    <<: *costmap_common_params
+    global_frame: odom
+    rolling_window: true
+    width: 5.0
+    height: 5.0
+    robot_radius: 0.0
+    plugins: ["obstacle_layer", "inflation_layer"]
+global_costmap:
+  ros__parameters:
+    <<: *costmap_common_params
+    global_frame: map
+    robot_radius: 0.0
+    plugins: ["obstacle_layer", "inflation_layer"]

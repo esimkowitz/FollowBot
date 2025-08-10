@@ -1,0 +1,10 @@
+[package]
+name = "leg_detector"
+version = "0.1.0"
+edition = "2021"
+[dependencies]
+anyhow = "1"
+rclrs = "0.3"
+[[bin]]
+name = "leg_detector_node"
+path = "src/main.rs"

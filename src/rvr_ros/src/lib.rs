@@ -1,0 +1,1 @@
+pub fn diff_drive_to_wheels(v: f32, w: f32, wheel_base: f32, wheel_radius: f32)->(f32,f32){let v_l=v-0.5*w*wheel_base;let v_r=v+0.5*w*wheel_base;(v_l/wheel_radius,v_r/wheel_radius)}

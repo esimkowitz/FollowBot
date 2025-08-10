@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>leg_detector</name>
+  <version>0.0.1</version>
+  <description>Rust LaserScan-to-legs prototype (skeleton)</description>
+  <maintainer email="esimkowitz@users.noreply.github.com">Evan Simkowitz</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cargo</buildtool_depend>
+  <depend>rclrs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

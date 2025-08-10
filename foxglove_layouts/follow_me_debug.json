@@ -1,0 +1,98 @@
+{
+  "name": "Follow-Me Debug",
+  "version": 2,
+  "layout": {
+    "root": {
+      "direction": "row",
+      "children": [
+        {
+          "direction": "column",
+          "children": [
+            {
+              "panel": "3D",
+              "savedProps": {
+                "cameraState": {
+                  "distance": 6.0,
+                  "phi": 0.9,
+                  "thetaOffset": 0.0
+                },
+                "topics": [
+                  {
+                    "topic": "/tf",
+                    "type": "tf2_msgs/TFMessage"
+                  },
+                  {
+                    "topic": "/tf_static",
+                    "type": "tf2_msgs/TFMessage"
+                  },
+                  {
+                    "topic": "/scan",
+                    "type": "sensor_msgs/LaserScan"
+                  },
+                  {
+                    "topic": "/plan",
+                    "type": "nav_msgs/Path"
+                  },
+                  {
+                    "topic": "/local_plan",
+                    "type": "nav_msgs/Path"
+                  },
+                  {
+                    "topic": "/map",
+                    "type": "nav_msgs/OccupancyGrid"
+                  },
+                  {
+                    "topic": "/local_costmap/costmap",
+                    "type": "nav_msgs/OccupancyGrid"
+                  }
+                ]
+              },
+              "title": "3D View"
+            },
+            {
+              "panel": "Plot",
+              "savedProps": {
+                "paths": [
+                  {
+                    "value": "/cmd_vel.linear.x"
+                  },
+                  {
+                    "value": "/cmd_vel.angular.z"
+                  }
+                ]
+              },
+              "title": "CmdVel"
+            }
+          ]
+        },
+        {
+          "direction": "column",
+          "children": [
+            {
+              "panel": "Image",
+              "savedProps": {
+                "topic": "/camera/image_raw"
+              },
+              "title": "Camera"
+            },
+            {
+              "panel": "RawMessages",
+              "savedProps": {
+                "topicPath": "/legs"
+              },
+              "title": "/legs"
+            },
+            {
+              "panel": "Teleop",
+              "savedProps": {
+                "topic": "/cmd_vel"
+              },
+              "title": "Teleop"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "userNodes": []
+}
