@@ -1,0 +1,84 @@
+launch:
+  - arg: { name: use_foxglove, default: "false" }
+  - arg: { name: rplidar_port, default: "/dev/ttyUSB0" }
+  - arg: { name: rplidar_frame, default: "laser" }
+  - arg: { name: params_file, default: "$(find-pkg-share bringup)/config/nav2_params.yaml" }
+
+  - node:
+      package: rplidar_ros
+      executable: rplidar_composition
+      name: rplidar
+      parameters:
+        - serial_port: $(var rplidar_port)
+          serial_baudrate: 115200
+          frame_id: $(var rplidar_frame)
+          angle_compensate: true
+
+  - node:
+      package: rvr_ros
+      executable: rvr_ros_node
+      name: rvr_ros
+      parameters:
+        - port: "/dev/ttyAMA0"
+          baud: 115200
+          deadman: 0.2
+
+  - node:
+      package: leg_detector
+      executable: leg_detector_node
+      name: leg_detector
+      parameters:
+        - jump_thresh: 0.2
+          min_pts: 3
+          max_pts: 25
+          min_r: 0.05
+          max_r: 0.12
+
+  - node:
+      package: tracker_fuser_rust
+      executable: tracker_fuser_rust_node
+      name: tracker_fuser_rust
+      parameters:
+        - standoff: 1.2
+          reissue_period: 1.5
+          frame_id: "base_link"
+
+  - node:
+      package: nav2_controller
+      executable: controller_server
+      output: screen
+      parameters: [$(var params_file)]
+
+  - node:
+      package: nav2_planner
+      executable: planner_server
+      output: screen
+      parameters: [$(var params_file)]
+
+  - node:
+      package: nav2_bt_navigator
+      executable: bt_navigator
+      output: screen
+      parameters: [$(var params_file)]
+
+  - node:
+      package: nav2_behavior_tree
+      executable: behavior_server
+      output: screen
+      parameters: [$(var params_file)]
+
+  - node:
+      package: nav2_waypoint_follower
+      executable: waypoint_follower
+      output: screen
+      parameters: [$(var params_file)]
+
+  - node:
+      package: foxglove_bridge
+      executable: foxglove_bridge
+      name: foxglove_bridge
+      if: $(var use_foxglove)
+      parameters:
+        - port: 8765
+          address: "0.0.0.0"
+          client_publish: true

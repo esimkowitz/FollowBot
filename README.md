@@ -8,24 +8,17 @@ A robot that can follow you around, based on ROS 2 Humble, Nav2, Sphero RVR, and
 - `tracker_fuser/`  – Rust: Fuses leg detections with RPLIDAR scans to create a `PoseArray` of detected legs
 - `foxglove_layouts/` – Foxglove Studio dashboard layout JSON
 
-## Build (colcon) – placeholder
-1) Install ROS 2 Humble, `ament_cargo`, and ros2-rust per https://github.com/ros2-rust/ros2_rust
-2) From the workspace root:
-   ```bash
-   source /opt/ros/humble/setup.bash
-   colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release
-   source install/setup.bash
-   ```
+## Scripts (run on the Pi)
+1. `scripts/01_os_prep.sh` – base packages, performance tweaks, zram, tools.
+2. `scripts/02_ros2_humble_ubuntu.sh` – ROS 2 Humble apt install and rosdep init.
+3. `scripts/03_ros2_rust_setup.sh` – rustup + ros2-rust scaffolding notes (build from source).
+4. `scripts/04_foxglove_bridge.sh` – install & test `foxglove_bridge`.
+5. `scripts/05_rplidar_ros.sh` – install RPLIDAR driver (apt first; fallback to source).
+6. `scripts/06_nav2_packages.sh` – Nav2 stack (apt) on Humble.
+7. `scripts/07_csi_camera_ubuntu.sh` – enable CSI camera on Ubuntu (libcamera + rpicam-apps from source).
+8. `scripts/20_build_workspace.sh` – build this workspace with colcon.
+9. `scripts/21_launch_minimal.sh` – launch LiDAR+RVR+leg_detector(+Foxglove).
+10. `scripts/22_launch_nav2.sh` – launch Nav2 + Rust tracker_fuser.
 
-## Launch
-```bash
-ros2 launch bringup follow_me_minimal.launch.py use_foxglove:=true rplidar_port:=/dev/ttyUSB0
-```
-
----
-## Nav2 + Tracker Fuser (pre-wired)
-```bash
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-ros2 launch bringup follow_me_nav2.launch.py use_foxglove:=true rplidar_port:=/dev/ttyUSB0
-```
+> These are scaffolds: read them, tweak variables at the top (device names, camera model),
+> and run with `bash -x` if you want to see each step.

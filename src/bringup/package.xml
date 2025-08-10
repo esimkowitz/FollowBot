@@ -2,13 +2,21 @@
 <package format="3">
   <name>bringup</name>
   <version>0.0.1</version>
-  <description>Launch files for RVR + RPLIDAR + leg detector + Foxglove bridge</description>
+  <description>YAML launch files for RVR + RPLIDAR + Nav2 + Foxglove</description>
   <maintainer email="esimkowitz@users.noreply.github.com">Evan Simkowitz</maintainer>
   <license>Apache-2.0</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <exec_depend>ros2launch</exec_depend>
   <exec_depend>rplidar_ros</exec_depend>
   <exec_depend>rvr_ros</exec_depend>
   <exec_depend>leg_detector</exec_depend>
   <exec_depend>foxglove_bridge</exec_depend>
-  <exec_depend>ros2launch</exec_depend>
+  <exec_depend>nav2_controller</exec_depend>
+  <exec_depend>nav2_planner</exec_depend>
+  <exec_depend>nav2_bt_navigator</exec_depend>
+  <exec_depend>nav2_behavior_tree</exec_depend>
+  <exec_depend>nav2_waypoint_follower</exec_depend>
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
 </package>

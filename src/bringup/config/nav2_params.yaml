@@ -1,10 +1,8 @@
-amcl:
-  ros__parameters:
-    use_sim_time: false
 bt_navigator:
   ros__parameters:
     use_sim_time: false
     default_bt_xml_filename: /opt/ros/humble/share/nav2_bt_navigator/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml
+
 controller_server:
   ros__parameters:
     use_sim_time: false
@@ -21,6 +19,7 @@ controller_server:
       regulate_min_approach_velocity: true
       use_approach_linear_velocity_scaling: true
       approach_velocity_scaling_dist: 0.6
+
 planner_server:
   ros__parameters:
     use_sim_time: false
@@ -32,19 +31,15 @@ planner_server:
       downsampling_factor: 2
       allow_unknown: true
       max_iterations: 2000
+
 behavior_server:
   ros__parameters:
     use_sim_time: false
+
 waypoint_follower:
   ros__parameters:
     use_sim_time: false
-nav2_controller:
-  ros__parameters:
-    use_sim_time: false
-map_server:
-  ros__parameters:
-    use_sim_time: false
-    yaml_filename: ""
+
 costmap_common_params: &costmap_common_params
   footprint: [[0.10, 0.11], [0.10, -0.11], [-0.10, -0.11], [-0.10, 0.11]]
   footprint_padding: 0.01
@@ -67,6 +62,7 @@ costmap_common_params: &costmap_common_params
     plugin: "nav2_costmap_2d::InflationLayer"
     cost_scaling_factor: 3.5
     inflation_radius: 0.55
+
 local_costmap:
   ros__parameters:
     <<: *costmap_common_params
@@ -76,6 +72,7 @@ local_costmap:
     height: 5.0
     robot_radius: 0.0
     plugins: ["obstacle_layer", "inflation_layer"]
+
 global_costmap:
   ros__parameters:
     <<: *costmap_common_params
