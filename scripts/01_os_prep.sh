@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+# Suppress undervoltage warnings (only if you trust your PSU)
+CONFIG=/boot/firmware/config.txt
+if ! grep -q '^avoid_warnings=2' "$CONFIG"; then
+  echo 'avoid_warnings=2' | sudo tee -a "$CONFIG"
+  echo "Undervoltage warnings suppressed (avoid_warnings=2)."
+fi
+
 # Base OS prep for Ubuntu 22.04 on Raspberry Pi 5
 sudo apt update
 sudo apt -y full-upgrade
