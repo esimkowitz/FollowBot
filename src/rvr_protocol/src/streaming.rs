@@ -10,9 +10,6 @@
 use crate::error::{Error, Result};
 use crate::ids::Target;
 
-/// Slot tokens available per processor.
-pub const SLOT_TOKENS: [u8; 4] = [0x01, 0x02, 0x03, 0x04];
-
 /// Firmware limit on services sharing one slot.
 pub const MAX_SERVICES_PER_SLOT: usize = 6;
 
@@ -236,6 +233,7 @@ pub struct SlotConfig {
 }
 
 impl SlotConfig {
+    /// `token` selects one of the processor's four slots (`0x01`..=`0x04`).
     pub fn new(processor: Target, token: u8) -> Self {
         Self {
             processor,
@@ -373,67 +371,72 @@ pub fn decode_attribute(raw: u32, size: DataSize, attr: &Attribute) -> f64 {
 }
 
 /// Decode one service's slice of a streaming blob.
-fn decode_service(def: &ServiceDef, bytes: &[u8]) -> StreamSample {
+///
+/// Dispatch is on [`ServiceId`] rather than the raw id, so adding a service is a
+/// compile error here until its shape is defined — the table and the decoder
+/// cannot drift apart.
+fn decode_service(service: ServiceId, bytes: &[u8]) -> StreamSample {
+    let def = service.def();
     let size = def.data_size;
     let width = size.byte_count();
 
-    let raws: Vec<u32> = bytes
-        .chunks_exact(width)
-        .map(|chunk| chunk.iter().fold(0u32, |acc, &b| (acc << 8) | b as u32))
-        .collect();
-
-    let value = |i: usize| decode_attribute(raws[i], size, &def.attributes[i]) as f32;
+    // Read the nth attribute's raw big-endian value in place.
+    let raw = |i: usize| {
+        bytes[i * width..(i + 1) * width]
+            .iter()
+            .fold(0u32, |acc, &b| (acc << 8) | b as u32)
+    };
+    let value = |i: usize| decode_attribute(raw(i), size, &def.attributes[i]) as f32;
     // Attributes with integral bounds map identically, so the raw value is exact.
-    let integral = |i: usize| raws[i];
+    let integral = raw;
 
-    match def.id {
-        0x0000 => StreamSample::Quaternion {
+    match service {
+        ServiceId::Quaternion => StreamSample::Quaternion {
             w: value(0),
             x: value(1),
             y: value(2),
             z: value(3),
         },
-        0x0001 => StreamSample::Imu {
+        ServiceId::Imu => StreamSample::Imu {
             pitch: value(0),
             roll: value(1),
             yaw: value(2),
         },
-        0x0002 => StreamSample::Accelerometer {
+        ServiceId::Accelerometer => StreamSample::Accelerometer {
             x: value(0),
             y: value(1),
             z: value(2),
         },
-        0x0003 => StreamSample::ColorDetection {
-            r: raws[0] as u8,
-            g: raws[1] as u8,
-            b: raws[2] as u8,
-            index: raws[3] as u8,
+        ServiceId::ColorDetection => StreamSample::ColorDetection {
+            r: raw(0) as u8,
+            g: raw(1) as u8,
+            b: raw(2) as u8,
+            index: raw(3) as u8,
             confidence: value(4),
         },
-        0x0004 => StreamSample::Gyroscope {
+        ServiceId::Gyroscope => StreamSample::Gyroscope {
             x: value(0),
             y: value(1),
             z: value(2),
         },
-        0x0006 => StreamSample::Locator {
+        ServiceId::Locator => StreamSample::Locator {
             x: value(0),
             y: value(1),
         },
-        0x0007 => StreamSample::Velocity {
+        ServiceId::Velocity => StreamSample::Velocity {
             x: value(0),
             y: value(1),
         },
-        0x0008 => StreamSample::Speed { speed: value(0) },
-        0x0009 => StreamSample::CoreTime {
+        ServiceId::Speed => StreamSample::Speed { speed: value(0) },
+        ServiceId::CoreTime => StreamSample::CoreTime {
             upper: integral(0),
             lower: integral(1),
         },
-        0x000A => StreamSample::AmbientLight { lux: value(0) },
-        0x000B => StreamSample::Encoders {
+        ServiceId::AmbientLight => StreamSample::AmbientLight { lux: value(0) },
+        ServiceId::Encoders => StreamSample::Encoders {
             left: integral(0),
             right: integral(1),
         },
-        other => unreachable!("service {other:#06X} is not in SERVICES"),
     }
 }
 
@@ -475,9 +478,8 @@ pub fn decode_notification(slot: &SlotConfig, payload: &[u8]) -> Result<StreamNo
     let mut samples = Vec::with_capacity(slot.services().len());
     let mut offset = 0;
     for service in slot.services() {
-        let def = service.def();
-        let end = offset + def.frame_len();
-        samples.push(decode_service(def, &data[offset..end]));
+        let end = offset + service.def().frame_len();
+        samples.push(decode_service(*service, &data[offset..end]));
         offset = end;
     }
     Ok(StreamNotification::Samples(samples))

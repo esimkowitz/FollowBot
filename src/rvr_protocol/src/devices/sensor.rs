@@ -3,6 +3,7 @@
 //! Streaming configuration lives in [`crate::streaming`]; this module carries the
 //! command ids and the one-shot sensor reads.
 
+use crate::error::Result;
 use crate::ids::{DeviceId, Target};
 use crate::streaming::{SlotConfig, MIN_STREAM_PERIOD_MS};
 
@@ -123,17 +124,16 @@ pub const fn target_for(command_id: u8) -> Target {
 }
 
 /// Parse the two big-endian `i32` counts from `get_encoder_counts`.
-pub fn parse_encoder_counts(payload: &[u8]) -> Option<(i32, i32)> {
-    let bytes = payload.get(..8)?;
-    let at = |i: usize| i32::from_be_bytes(bytes[i..i + 4].try_into().expect("4 bytes"));
-    Some((at(0), at(4)))
+pub fn parse_encoder_counts(payload: &[u8]) -> Result<(i32, i32)> {
+    Ok((
+        i32::from_be_bytes(crate::devices::be_bytes(payload, 0)?),
+        i32::from_be_bytes(crate::devices::be_bytes(payload, 4)?),
+    ))
 }
 
 /// Parse a big-endian `f32` ambient light reading, in lux.
-pub fn parse_ambient_light(payload: &[u8]) -> Option<f32> {
-    payload
-        .get(..4)
-        .map(|b| f32::from_be_bytes(b.try_into().expect("4 bytes")))
+pub fn parse_ambient_light(payload: &[u8]) -> Result<f32> {
+    crate::devices::be_bytes(payload, 0).map(f32::from_be_bytes)
 }
 
 #[cfg(test)]
@@ -174,12 +174,15 @@ mod tests {
     fn encoder_counts_parse_as_signed_big_endian() {
         // get_encoder_counts returns i32s directly, unlike the streamed form.
         let payload = [0x00, 0x00, 0x01, 0x00, 0xFF, 0xFF, 0xFF, 0xFF];
-        assert_eq!(parse_encoder_counts(&payload), Some((256, -1)));
-        assert_eq!(parse_encoder_counts(&payload[..7]), None);
+        assert_eq!(parse_encoder_counts(&payload).unwrap(), (256, -1));
+        assert!(parse_encoder_counts(&payload[..7]).is_err());
     }
 
     #[test]
     fn ambient_light_parses_from_big_endian_f32() {
-        assert_eq!(parse_ambient_light(&[0x43, 0xFA, 0x00, 0x00]), Some(500.0));
+        assert_eq!(
+            parse_ambient_light(&[0x43, 0xFA, 0x00, 0x00]).unwrap(),
+            500.0
+        );
     }
 }

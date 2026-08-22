@@ -1,5 +1,6 @@
 //! System info (device `0x11`) and version reporting.
 
+use crate::error::Result;
 use crate::ids::DeviceId;
 
 pub const DEVICE: DeviceId = DeviceId::SystemInfo;
@@ -58,13 +59,11 @@ pub fn get_core_up_time_in_milliseconds() -> Vec<u8> {
 }
 
 /// Parse three big-endian `u16`s.
-pub fn parse_version(payload: &[u8]) -> Option<Version> {
-    let bytes = payload.get(..6)?;
-    let at = |i: usize| u16::from_be_bytes([bytes[i], bytes[i + 1]]);
-    Some(Version {
-        major: at(0),
-        minor: at(2),
-        revision: at(4),
+pub fn parse_version(payload: &[u8]) -> Result<Version> {
+    Ok(Version {
+        major: u16::from_be_bytes(crate::devices::be_bytes(payload, 0)?),
+        minor: u16::from_be_bytes(crate::devices::be_bytes(payload, 2)?),
+        revision: u16::from_be_bytes(crate::devices::be_bytes(payload, 4)?),
     })
 }
 
@@ -78,10 +77,8 @@ pub fn parse_string(payload: &[u8]) -> String {
 }
 
 /// Parse a big-endian `u64` uptime.
-pub fn parse_uptime_ms(payload: &[u8]) -> Option<u64> {
-    payload
-        .get(..8)
-        .map(|b| u64::from_be_bytes(b.try_into().expect("8 bytes")))
+pub fn parse_uptime_ms(payload: &[u8]) -> Result<u64> {
+    crate::devices::be_bytes(payload, 0).map(u64::from_be_bytes)
 }
 
 #[cfg(test)]
@@ -101,7 +98,7 @@ mod tests {
             }
         );
         assert_eq!(version.to_string(), "3.1.42");
-        assert_eq!(parse_version(&payload[..5]), None, "truncated");
+        assert!(parse_version(&payload[..5]).is_err(), "truncated");
     }
 
     #[test]
@@ -113,7 +110,10 @@ mod tests {
 
     #[test]
     fn uptime_parses_from_big_endian_u64() {
-        assert_eq!(parse_uptime_ms(&[0, 0, 0, 0, 0, 0, 0x03, 0xE8]), Some(1000));
-        assert_eq!(parse_uptime_ms(&[0, 0]), None);
+        assert_eq!(
+            parse_uptime_ms(&[0, 0, 0, 0, 0, 0, 0x03, 0xE8]).unwrap(),
+            1000
+        );
+        assert!(parse_uptime_ms(&[0, 0]).is_err());
     }
 }

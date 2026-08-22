@@ -28,12 +28,6 @@ pub enum Error {
     #[error("response payload too short: expected {expected} bytes, got {actual}")]
     ShortPayload { expected: usize, actual: usize },
 
-    #[error("streaming data for unconfigured slot (processor {processor:?}, token {token})")]
-    UnknownStreamSlot {
-        processor: crate::ids::Target,
-        token: u8,
-    },
-
     #[error("timed out waiting for a response to {device_id:#04X}/{command_id:#04X}")]
     Timeout { device_id: u8, command_id: u8 },
 
@@ -43,6 +37,9 @@ pub enum Error {
     #[error("streaming slot is full (max {max} services)")]
     SlotFull { max: usize },
 
+    /// Underlying I/O failure. Serial-port errors arrive here too, funnelled
+    /// through `io::Error` so this enum has the same shape with or without the
+    /// `serial` feature.
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }

@@ -6,12 +6,13 @@
 
 use rvr_protocol::client::Notification;
 use rvr_protocol::devices::{drive, power, sensor, system_info};
-use rvr_protocol::ids::{DeviceId, Target};
+use rvr_protocol::ids::{DeviceId, ErrorCode, Target};
 use rvr_protocol::packet::{flags, Packet, PacketReader};
 use rvr_protocol::streaming::{DataSize, ServiceId, SlotConfig, StreamSample};
 use rvr_protocol::transport::MockTransport;
 use rvr_protocol::{NotificationChannel, RvrClient};
 
+use std::sync::Arc;
 use std::time::Duration;
 
 /// Decode whatever the client wrote to the wire.
@@ -24,7 +25,7 @@ fn sent_packets(transport: &MockTransport) -> Vec<Packet> {
 }
 
 /// Build the response the robot would send for a request.
-fn response_to(request: &Packet, payload: Vec<u8>) -> Vec<u8> {
+fn response_to(request: &Packet, error: ErrorCode, payload: Vec<u8>) -> Vec<u8> {
     Packet {
         flags: flags::IS_RESPONSE | flags::HAS_TARGET | flags::HAS_SOURCE,
         // Source and target swap on the way back.
@@ -33,7 +34,7 @@ fn response_to(request: &Packet, payload: Vec<u8>) -> Vec<u8> {
         device_id: request.device_id,
         command_id: request.command_id,
         sequence: request.sequence,
-        error: Some(rvr_protocol::ErrorCode::Success),
+        error: Some(error),
         payload,
     }
     .encode()
@@ -54,25 +55,49 @@ fn notification(source: Target, device: DeviceId, command: u8, payload: Vec<u8>)
     .encode()
 }
 
-/// Spawn a thread that answers the next request with `payload`.
+/// Spawn a thread that answers the next `count` requests.
 ///
-/// The client blocks awaiting a response, so the reply has to come from
-/// elsewhere; this polls the mock until the request appears.
+/// The client blocks awaiting each response, so replies have to come from
+/// another thread; this polls the mock until each request appears. Returns the
+/// requests it answered.
+fn answer_requests(
+    transport: &MockTransport,
+    count: usize,
+    error: ErrorCode,
+    payload: Vec<u8>,
+) -> std::thread::JoinHandle<Vec<Packet>> {
+    let transport = transport.clone();
+    std::thread::spawn(move || {
+        let mut answered = Vec::with_capacity(count);
+        while answered.len() < count {
+            let request = (0..200)
+                .find_map(|_| {
+                    let found = sent_packets(&transport).into_iter().next();
+                    if found.is_none() {
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                    found
+                })
+                .expect("client never sent a request");
+            transport.push_to_read(&response_to(&request, error, payload.clone()));
+            answered.push(request);
+        }
+        answered
+    })
+}
+
+/// Answer exactly one request successfully, returning it.
 fn answer_next_request(
     transport: &MockTransport,
     payload: Vec<u8>,
 ) -> std::thread::JoinHandle<Packet> {
-    let transport = transport.clone();
+    let handle = answer_requests(transport, 1, ErrorCode::Success, payload);
     std::thread::spawn(move || {
-        for _ in 0..200 {
-            let packets = sent_packets(&transport);
-            if let Some(request) = packets.into_iter().next() {
-                transport.push_to_read(&response_to(&request, payload));
-                return request;
-            }
-            std::thread::sleep(Duration::from_millis(5));
-        }
-        panic!("client never sent a request");
+        handle
+            .join()
+            .expect("responder thread panicked")
+            .pop()
+            .expect("one request answered")
     })
 }
 
@@ -170,32 +195,9 @@ fn robot_errors_surface_as_errors_not_silent_success() {
     let transport = MockTransport::new();
     let client = RvrClient::new(Box::new(transport.clone())).unwrap();
 
-    let poller = {
-        let transport = transport.clone();
-        std::thread::spawn(move || {
-            for _ in 0..200 {
-                if let Some(request) = sent_packets(&transport).into_iter().next() {
-                    let mut failure = Packet {
-                        flags: flags::IS_RESPONSE | flags::HAS_TARGET | flags::HAS_SOURCE,
-                        target: Some(0x00),
-                        source: request.target,
-                        device_id: request.device_id,
-                        command_id: request.command_id,
-                        sequence: request.sequence,
-                        error: Some(rvr_protocol::ErrorCode::Busy),
-                        payload: vec![],
-                    };
-                    failure.error = Some(rvr_protocol::ErrorCode::Busy);
-                    transport.push_to_read(&failure.encode());
-                    return;
-                }
-                std::thread::sleep(Duration::from_millis(5));
-            }
-        })
-    };
-
+    let responder = answer_requests(&transport, 1, ErrorCode::Busy, vec![]);
     let result = client.battery_percentage();
-    poller.join().unwrap();
+    responder.join().unwrap();
 
     assert!(
         matches!(
@@ -427,21 +429,8 @@ fn clearing_streaming_forgets_the_slot_layout() {
     responder.join().unwrap();
 
     // clear_streaming issues stop and then clear; answer both.
-    let clearing = {
-        let transport = transport.clone();
-        std::thread::spawn(move || {
-            // Answer both requests clear_streaming makes.
-            for _ in 0..2 {
-                for _ in 0..200 {
-                    if let Some(request) = sent_packets(&transport).into_iter().next() {
-                        transport.push_to_read(&response_to(&request, vec![]));
-                        break;
-                    }
-                    std::thread::sleep(Duration::from_millis(5));
-                }
-            }
-        })
-    };
+    // clear_streaming issues stop and then clear; answer both.
+    let clearing = answer_requests(&transport, 2, ErrorCode::Success, vec![]);
     client.clear_streaming(Target::Secondary).unwrap();
     clearing.join().unwrap();
 
@@ -461,5 +450,43 @@ fn clearing_streaming_forgets_the_slot_layout() {
             .recv_timeout(Duration::from_millis(300))
             .is_err(),
         "an unconfigured slot should be dropped, not decoded"
+    );
+}
+
+#[test]
+fn a_handler_may_call_back_into_the_client() {
+    // The handler runs on the RX thread holding no locks, so reaching back into
+    // the client from inside it must not deadlock. Reacting to a stall by
+    // stopping is exactly what a base driver would want to do.
+    let transport = MockTransport::new();
+    let client = Arc::new(RvrClient::new(Box::new(transport.clone())).unwrap());
+
+    let (done_tx, done_rx) = std::sync::mpsc::channel();
+    let client_for_handler = Arc::clone(&client);
+    client.on_notification(Box::new(move |notification| {
+        if let Notification::MotorStall(_) = notification {
+            client_for_handler.drive_stop().unwrap();
+            let _ = done_tx.send(());
+        }
+    }));
+
+    transport.push_to_read(&notification(
+        Target::Secondary,
+        DeviceId::Drive,
+        drive::cid::MOTOR_STALL_NOTIFY,
+        vec![0, 1],
+    ));
+
+    done_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("handler should complete without deadlocking");
+
+    let stops = sent_packets(&transport)
+        .into_iter()
+        .filter(|p| p.command_id == drive::cid::DRIVE_STOP)
+        .count();
+    assert_eq!(
+        stops, 1,
+        "the handler's drive_stop should have reached the wire"
     );
 }

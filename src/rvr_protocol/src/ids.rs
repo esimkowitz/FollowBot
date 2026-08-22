@@ -21,14 +21,6 @@ impl Target {
             _ => None,
         }
     }
-
-    pub fn port(self) -> u8 {
-        (self as u8) >> 4
-    }
-
-    pub fn node(self) -> u8 {
-        (self as u8) & 0x0F
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -91,10 +83,9 @@ mod tests {
 
     #[test]
     fn targets_encode_as_port_and_node_nibbles() {
+        // Both processors sit on port 0, so the address is just the node nibble.
         assert_eq!(Target::Primary as u8, 0x01);
         assert_eq!(Target::Secondary as u8, 0x02);
-        assert_eq!(Target::Secondary.port(), 0);
-        assert_eq!(Target::Secondary.node(), 2);
     }
 
     #[test]

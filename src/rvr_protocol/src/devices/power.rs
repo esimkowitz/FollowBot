@@ -1,5 +1,6 @@
 //! Power commands (device `0x13`), sent to the Nordic processor.
 
+use crate::error::{Error, Result};
 use crate::ids::{DeviceId, Target};
 
 pub const DEVICE: DeviceId = DeviceId::Power;
@@ -88,15 +89,16 @@ pub fn get_current_sense_amplifier_current(amplifier: AmplifierId) -> Vec<u8> {
 }
 
 /// Parse the `u8` percentage response.
-pub fn parse_battery_percentage(payload: &[u8]) -> Option<u8> {
-    payload.first().copied()
+pub fn parse_battery_percentage(payload: &[u8]) -> Result<u8> {
+    payload.first().copied().ok_or(Error::ShortPayload {
+        expected: 1,
+        actual: payload.len(),
+    })
 }
 
 /// Parse a big-endian `f32` volts response.
-pub fn parse_voltage(payload: &[u8]) -> Option<f32> {
-    payload
-        .get(..4)
-        .map(|b| f32::from_be_bytes(b.try_into().expect("4 bytes")))
+pub fn parse_voltage(payload: &[u8]) -> Result<f32> {
+    crate::devices::be_bytes(payload, 0).map(f32::from_be_bytes)
 }
 
 pub fn parse_battery_voltage_state(payload: &[u8]) -> Option<BatteryVoltageState> {
@@ -110,8 +112,8 @@ mod tests {
     #[test]
     fn voltage_parses_from_big_endian_f32() {
         // 12.5f32 == 0x41480000
-        assert_eq!(parse_voltage(&[0x41, 0x48, 0x00, 0x00]), Some(12.5));
-        assert_eq!(parse_voltage(&[0x41, 0x48]), None, "truncated payload");
+        assert_eq!(parse_voltage(&[0x41, 0x48, 0x00, 0x00]).unwrap(), 12.5);
+        assert!(parse_voltage(&[0x41, 0x48]).is_err(), "truncated payload");
     }
 
     #[test]
@@ -129,7 +131,7 @@ mod tests {
 
     #[test]
     fn percentage_parses_from_a_single_byte() {
-        assert_eq!(parse_battery_percentage(&[87]), Some(87));
-        assert_eq!(parse_battery_percentage(&[]), None);
+        assert_eq!(parse_battery_percentage(&[87]).unwrap(), 87);
+        assert!(parse_battery_percentage(&[]).is_err());
     }
 }

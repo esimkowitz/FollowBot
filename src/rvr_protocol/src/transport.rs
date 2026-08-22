@@ -73,13 +73,13 @@ mod serial {
 #[cfg(feature = "serial")]
 pub use serial::SerialTransport;
 
-/// Shared state behind a [`MockTransport`], inspectable from tests.
+/// Buffers behind a [`MockTransport`].
 #[derive(Debug, Default)]
-pub struct MockState {
+struct MockState {
     /// Every byte the client has written.
-    pub written: Vec<u8>,
+    written: Vec<u8>,
     /// Bytes queued for the client to read.
-    pub to_read: std::collections::VecDeque<u8>,
+    to_read: std::collections::VecDeque<u8>,
 }
 
 /// An in-memory transport for tests: records what was written and replays what
@@ -92,10 +92,6 @@ pub struct MockTransport {
 impl MockTransport {
     pub fn new() -> Self {
         Self::default()
-    }
-
-    pub fn state(&self) -> Arc<Mutex<MockState>> {
-        Arc::clone(&self.state)
     }
 
     /// Queue bytes for the client to read, as though the robot had sent them.

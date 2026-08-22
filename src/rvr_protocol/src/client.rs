@@ -62,13 +62,14 @@ struct Shared {
     pending: Mutex<PendingMap>,
     /// Slot layouts, needed to decode streaming blobs.
     slots: Mutex<HashMap<(Target, u8), SlotConfig>>,
-    handler: Mutex<Option<NotificationHandler>>,
     running: AtomicBool,
 }
 
 /// A connection to the robot.
 pub struct RvrClient {
     shared: Arc<Shared>,
+    /// Hands newly registered handlers to the RX thread.
+    handler_tx: Sender<NotificationHandler>,
     writer: Mutex<Box<dyn Transport>>,
     sequence: AtomicU8,
     timeout: Duration,
@@ -82,17 +83,21 @@ impl RvrClient {
         let shared = Arc::new(Shared {
             pending: Mutex::new(HashMap::new()),
             slots: Mutex::new(HashMap::new()),
-            handler: Mutex::new(None),
             running: AtomicBool::new(true),
         });
+
+        // The handler is owned by the RX thread rather than shared behind a lock,
+        // so user code never runs while a lock the RX thread needs is held.
+        let (handler_tx, handler_rx) = channel();
 
         let rx_shared = Arc::clone(&shared);
         let rx_thread = std::thread::Builder::new()
             .name("rvr-rx".into())
-            .spawn(move || receive_loop(reader, rx_shared))?;
+            .spawn(move || receive_loop(reader, rx_shared, handler_rx))?;
 
         Ok(Self {
             shared,
+            handler_tx,
             writer: Mutex::new(transport),
             // The firmware's generator pre-increments, so the first id sent is 1.
             sequence: AtomicU8::new(0),
@@ -106,10 +111,13 @@ impl RvrClient {
         self
     }
 
-    /// Register a callback for notifications. Runs on the RX thread, so it should
-    /// hand work off rather than block.
+    /// Register a callback for notifications.
+    ///
+    /// The callback runs on the RX thread, so it should hand work off rather than
+    /// block — anything slow here delays every subsequent packet. It holds no
+    /// locks while running, so it may call back into the client.
     pub fn on_notification(&self, handler: NotificationHandler) {
-        *self.shared.handler.lock().unwrap() = Some(handler);
+        let _ = self.handler_tx.send(handler);
     }
 
     fn next_sequence(&self) -> u8 {
@@ -177,6 +185,11 @@ impl RvrClient {
         ))
     }
 
+    /// Send a command and wait for it to succeed, discarding the response body.
+    fn command(&self, target: Target, device: DeviceId, cid: u8, payload: Vec<u8>) -> Result<()> {
+        self.request(target, device, cid, payload).map(|_| ())
+    }
+
     fn write_packet(&self, packet: &Packet) -> Result<()> {
         self.writer.lock().unwrap().write_all(&packet.encode())
     }
@@ -184,23 +197,21 @@ impl RvrClient {
     // ---- Power ----------------------------------------------------------
 
     pub fn wake(&self) -> Result<()> {
-        self.request(
+        self.command(
             power::TARGET,
             power::DEVICE,
             power::cid::WAKE,
             power::wake(),
-        )?;
-        Ok(())
+        )
     }
 
     pub fn sleep(&self) -> Result<()> {
-        self.request(
+        self.command(
             power::TARGET,
             power::DEVICE,
             power::cid::SLEEP,
             power::sleep(),
-        )?;
-        Ok(())
+        )
     }
 
     pub fn battery_percentage(&self) -> Result<u8> {
@@ -210,10 +221,7 @@ impl RvrClient {
             power::cid::GET_BATTERY_PERCENTAGE,
             power::get_battery_percentage(),
         )?;
-        power::parse_battery_percentage(&response.payload).ok_or(Error::ShortPayload {
-            expected: 1,
-            actual: response.payload.len(),
-        })
+        power::parse_battery_percentage(&response.payload)
     }
 
     pub fn battery_voltage(&self) -> Result<f32> {
@@ -223,20 +231,16 @@ impl RvrClient {
             power::cid::GET_BATTERY_VOLTAGE_IN_VOLTS,
             power::get_battery_voltage_in_volts(power::VoltageReadingType::CalibratedAndFiltered),
         )?;
-        power::parse_voltage(&response.payload).ok_or(Error::ShortPayload {
-            expected: 4,
-            actual: response.payload.len(),
-        })
+        power::parse_voltage(&response.payload)
     }
 
     pub fn enable_battery_notifications(&self, enabled: bool) -> Result<()> {
-        self.request(
+        self.command(
             power::TARGET,
             power::DEVICE,
             power::cid::ENABLE_BATTERY_VOLTAGE_STATE_CHANGE_NOTIFY,
             power::enable_battery_voltage_state_change_notify(enabled),
-        )?;
-        Ok(())
+        )
     }
 
     // ---- Drive ----------------------------------------------------------
@@ -262,58 +266,51 @@ impl RvrClient {
     }
 
     pub fn reset_yaw(&self) -> Result<()> {
-        self.request(
+        self.command(
             drive::TARGET,
             drive::DEVICE,
             drive::cid::RESET_YAW,
             drive::reset_yaw(),
-        )?;
-        Ok(())
+        )
     }
 
     pub fn set_control_system_timeout(&self, timeout_ms: u16) -> Result<()> {
-        self.request(
+        self.command(
             drive::TARGET,
             drive::DEVICE,
             drive::cid::SET_CUSTOM_CONTROL_SYSTEM_TIMEOUT,
             drive::set_custom_control_system_timeout(timeout_ms),
-        )?;
-        Ok(())
+        )
     }
 
     pub fn enable_motor_stall_notifications(&self, enabled: bool) -> Result<()> {
-        self.request(
+        self.command(
             drive::TARGET,
             drive::DEVICE,
             drive::cid::ENABLE_MOTOR_STALL_NOTIFY,
             drive::enable_motor_stall_notify(enabled),
-        )?;
-        Ok(())
+        )
     }
 
     // ---- Sensors --------------------------------------------------------
 
     pub fn reset_locator(&self) -> Result<()> {
-        self.request(
-            Target::Secondary,
+        self.command(
+            sensor::target_for(sensor::cid::RESET_LOCATOR_X_AND_Y),
             sensor::DEVICE,
             sensor::cid::RESET_LOCATOR_X_AND_Y,
             sensor::reset_locator_x_and_y(),
-        )?;
-        Ok(())
+        )
     }
 
     pub fn encoder_counts(&self) -> Result<(i32, i32)> {
         let response = self.request(
-            Target::Secondary,
+            sensor::target_for(sensor::cid::GET_ENCODER_COUNTS),
             sensor::DEVICE,
             sensor::cid::GET_ENCODER_COUNTS,
             sensor::get_encoder_counts(),
         )?;
-        sensor::parse_encoder_counts(&response.payload).ok_or(Error::ShortPayload {
-            expected: 8,
-            actual: response.payload.len(),
-        })
+        sensor::parse_encoder_counts(&response.payload)
     }
 
     /// Configure a streaming slot and remember its layout for decoding.
@@ -327,34 +324,31 @@ impl RvrClient {
             .unwrap()
             .insert((slot.processor, slot.token), slot.clone());
 
-        self.request(
+        self.command(
             slot.processor,
             sensor::DEVICE,
             sensor::cid::CONFIGURE_STREAMING_SERVICE,
             sensor::configure_streaming_service(slot),
-        )?;
-        Ok(())
+        )
     }
 
     /// Begin streaming on `processor` at `period_ms` (clamped to the 33 ms floor).
     pub fn start_streaming(&self, processor: Target, period_ms: u16) -> Result<()> {
-        self.request(
+        self.command(
             processor,
             sensor::DEVICE,
             sensor::cid::START_STREAMING_SERVICE,
             sensor::start_streaming_service(period_ms),
-        )?;
-        Ok(())
+        )
     }
 
     pub fn stop_streaming(&self, processor: Target) -> Result<()> {
-        self.request(
+        self.command(
             processor,
             sensor::DEVICE,
             sensor::cid::STOP_STREAMING_SERVICE,
             sensor::stop_streaming_service(),
-        )?;
-        Ok(())
+        )
     }
 
     /// Stop and clear streaming, forgetting the slot layouts.
@@ -363,7 +357,7 @@ impl RvrClient {
     /// produce blobs that no longer match what the host expects.
     pub fn clear_streaming(&self, processor: Target) -> Result<()> {
         self.stop_streaming(processor)?;
-        self.request(
+        self.command(
             processor,
             sensor::DEVICE,
             sensor::cid::CLEAR_STREAMING_SERVICE,
@@ -387,10 +381,7 @@ impl RvrClient {
             system_info::cid::GET_MAIN_APPLICATION_VERSION,
             system_info::get_main_application_version(),
         )?;
-        system_info::parse_version(&response.payload).ok_or(Error::ShortPayload {
-            expected: 6,
-            actual: response.payload.len(),
-        })
+        system_info::parse_version(&response.payload)
     }
 }
 
@@ -404,11 +395,21 @@ impl Drop for RvrClient {
 }
 
 /// Read packets until the client is dropped, routing each to its destination.
-fn receive_loop(mut reader: Box<dyn Transport>, shared: Arc<Shared>) {
+fn receive_loop(
+    mut reader: Box<dyn Transport>,
+    shared: Arc<Shared>,
+    handler_rx: Receiver<NotificationHandler>,
+) {
     let mut framer = PacketReader::new();
     let mut buf = [0u8; 512];
+    let mut handler: Option<NotificationHandler> = None;
 
     while shared.running.load(Ordering::Relaxed) {
+        // Pick up the most recently registered handler, if any.
+        while let Ok(new_handler) = handler_rx.try_recv() {
+            handler = Some(new_handler);
+        }
+
         let n = match reader.read(&mut buf) {
             Ok(0) => {
                 // Quiet line: yield rather than spin.
@@ -425,7 +426,7 @@ fn receive_loop(mut reader: Box<dyn Transport>, shared: Arc<Shared>) {
 
         for result in framer.push(&buf[..n]) {
             match result {
-                Ok(packet) => route(&shared, packet),
+                Ok(packet) => route(&shared, packet, handler.as_mut()),
                 // A corrupt frame is expected occasionally on a noisy line; the
                 // framer has already resynchronized.
                 Err(_) => continue,
@@ -435,7 +436,7 @@ fn receive_loop(mut reader: Box<dyn Transport>, shared: Arc<Shared>) {
 }
 
 /// Deliver a packet to whoever is waiting for it.
-fn route(shared: &Arc<Shared>, packet: Packet) {
+fn route(shared: &Arc<Shared>, packet: Packet, handler: Option<&mut NotificationHandler>) {
     if packet.is_response() {
         let key = (packet.device_id, packet.command_id, packet.sequence);
         if let Some(tx) = shared.pending.lock().unwrap().remove(&key) {
@@ -446,22 +447,24 @@ fn route(shared: &Arc<Shared>, packet: Packet) {
         return;
     }
 
-    if let Some(notification) = classify(shared, &packet) {
-        if let Some(handler) = shared.handler.lock().unwrap().as_mut() {
-            handler(notification);
-        }
+    if let (Some(handler), Some(notification)) = (handler, classify(shared, &packet)) {
+        handler(notification);
     }
 }
+
+// Device ids as module-level consts so `classify`'s match arms are real patterns
+// rather than guard clauses. These must be module-level: a `const` declared
+// inside the function would be read as a binding and match everything.
+const DRIVE: u8 = DeviceId::Drive as u8;
+const POWER: u8 = DeviceId::Power as u8;
+const SENSOR: u8 = DeviceId::Sensor as u8;
 
 /// Turn an unsolicited packet into a typed notification.
 fn classify(shared: &Arc<Shared>, packet: &Packet) -> Option<Notification> {
     let processor = packet.source.and_then(Target::from_byte);
 
     match (packet.device_id, packet.command_id) {
-        (id, cid)
-            if id == DeviceId::Sensor as u8
-                && cid == sensor::cid::STREAMING_SERVICE_DATA_NOTIFY =>
-        {
+        (SENSOR, sensor::cid::STREAMING_SERVICE_DATA_NOTIFY) => {
             // Slots are per-processor: a Nordic slot 1 and an ST slot 1 both
             // stream under token 1, so the source byte is what disambiguates them.
             let processor = processor?;
@@ -485,27 +488,18 @@ fn classify(shared: &Arc<Shared>, packet: &Packet) -> Option<Notification> {
                 Err(_) => None,
             }
         }
-        (id, cid) if id == DeviceId::Drive as u8 && cid == drive::cid::MOTOR_STALL_NOTIFY => {
+        (DRIVE, drive::cid::MOTOR_STALL_NOTIFY) => {
             drive::parse_motor_stall_notify(&packet.payload).map(Notification::MotorStall)
         }
-        (id, cid) if id == DeviceId::Drive as u8 && cid == drive::cid::MOTOR_FAULT_NOTIFY => {
-            Some(Notification::MotorFault {
-                faulted: packet.payload.first().is_some_and(|&b| b != 0),
-            })
-        }
-        (id, cid)
-            if id == DeviceId::Power as u8
-                && cid == power::cid::BATTERY_VOLTAGE_STATE_CHANGE_NOTIFY =>
-        {
+        (DRIVE, drive::cid::MOTOR_FAULT_NOTIFY) => Some(Notification::MotorFault {
+            faulted: packet.payload.first().is_some_and(|&b| b != 0),
+        }),
+        (POWER, power::cid::BATTERY_VOLTAGE_STATE_CHANGE_NOTIFY) => {
             power::parse_battery_voltage_state(&packet.payload)
                 .map(Notification::BatteryVoltageState)
         }
-        (id, cid) if id == DeviceId::Power as u8 && cid == power::cid::WILL_SLEEP_NOTIFY => {
-            Some(Notification::WillSleep)
-        }
-        (id, cid) if id == DeviceId::Power as u8 && cid == power::cid::DID_SLEEP_NOTIFY => {
-            Some(Notification::DidSleep)
-        }
+        (POWER, power::cid::WILL_SLEEP_NOTIFY) => Some(Notification::WillSleep),
+        (POWER, power::cid::DID_SLEEP_NOTIFY) => Some(Notification::DidSleep),
         _ => Some(Notification::Other(packet.clone())),
     }
 }
