@@ -1,0 +1,13 @@
+# Rust build artifacts
+target/
+
+# ROS 2 / colcon build output
+build/
+install/
+log/
+
+# Editor and OS cruft
+.DS_Store
+.vscode/
+.idea/
+*.swp

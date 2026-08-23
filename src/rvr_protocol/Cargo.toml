@@ -1,0 +1,23 @@
+[package]
+name = "rvr_protocol"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Sphero RVR UART protocol: framing, commands, and sensor streaming"
+license = "Apache-2.0"
+
+[dependencies]
+serialport = { version = "4", optional = true }
+thiserror = "2"
+
+[[bin]]
+name = "rvr_probe"
+path = "src/bin/rvr_probe.rs"
+# Needs a real UART, so it only exists when the serial transport is compiled in.
+required-features = ["serial"]
+
+[features]
+default = ["serial"]
+# The serial transport pulls in a native dependency; tests and host-side
+# development run fine without it via MockTransport.
+serial = ["dep:serialport"]
