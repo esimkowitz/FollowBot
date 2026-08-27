@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+ROS_DISTRO="${ROS_DISTRO:-jazzy}"
 # Install Foxglove Bridge (apt when available, else from source)
-source /opt/ros/humble/setup.bash
-if sudo apt -y install ros-humble-foxglove-bridge; then
+source /opt/ros/${ROS_DISTRO}/setup.bash
+if sudo apt -y install ros-${ROS_DISTRO}-foxglove-bridge; then
   echo "foxglove_bridge installed from apt."
 else
   echo "Apt package not found, building from source..."

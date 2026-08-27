@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-source /opt/ros/humble/setup.bash
+ROS_DISTRO="${ROS_DISTRO:-jazzy}"
+source /opt/ros/${ROS_DISTRO}/setup.bash
 WS_DIR="${1:-$HOME/ros2_follow_me_ws}"
 source "$WS_DIR/install/setup.bash"
 RPLIDAR_PORT="${2:-/dev/ttyUSB0}"

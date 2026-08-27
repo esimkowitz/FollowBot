@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+ROS_DISTRO="${ROS_DISTRO:-jazzy}"
 # Install RPLIDAR ROS 2 driver (try apt, else build from source)
-source /opt/ros/humble/setup.bash
-if sudo apt -y install ros-humble-rplidar-ros; then
+source /opt/ros/${ROS_DISTRO}/setup.bash
+if sudo apt -y install ros-${ROS_DISTRO}-rplidar-ros; then
   echo "rplidar_ros installed from apt."
 else
   echo "Building rplidar_ros from source (ros2 branch if available)..."

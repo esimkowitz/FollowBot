@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+ROS_DISTRO="${ROS_DISTRO:-jazzy}"
 # Install Rust toolchain and scaffold ros2-rust build prereqs.
 # Note: ros2-rust is built from source; verify the repo for latest instructions.
 
@@ -14,14 +15,19 @@ rustup component add rustfmt clippy
 # Helpful system deps
 sudo apt -y install libclang-dev
 
-cat <<'EOF'
+cat <<EOF
 ------------------------------------------------------------
 NEXT STEPS (ros2-rust):
+  ros2-rust ships no apt packages, so it must be built from source. Note that
+  rclrs is community-maintained and its Jazzy support has known rough edges
+  (see ros2-rust/ros2_rust#588) — rvr_protocol itself is pure Rust and needs
+  none of this.
+
   1) Clone ros2-rust super-repo into a parallel ws:
      git clone https://github.com/ros2-rust/ros2_rust.git ~/ros2_rust
   2) Build:
      cd ~/ros2_rust
-     source /opt/ros/humble/setup.bash
+     source /opt/ros/${ROS_DISTRO}/setup.bash
      colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release
      source install/setup.bash
   3) In this workspace, uncomment Rust message/action uses and rebuild.
