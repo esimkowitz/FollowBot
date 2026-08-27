@@ -6,7 +6,7 @@
 //!
 //! ```ignore
 //! # use rvr_protocol::{RvrClient, SerialTransport};
-//! let transport = SerialTransport::open("/dev/ttyAMA0", 115_200)?;
+//! let transport = SerialTransport::open("/dev/rvr", 115_200)?;
 //! let rvr = RvrClient::new(transport);
 //! rvr.wake()?;
 //! rvr.drive_tank_si(0.5, 0.5)?;

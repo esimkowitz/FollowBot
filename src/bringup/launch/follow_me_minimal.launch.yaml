@@ -18,7 +18,7 @@ launch:
       executable: rvr_ros_node
       name: rvr_ros
       parameters:
-        - port: "/dev/ttyAMA0"
+        - port: "/dev/rvr"
           baud: 115200
           deadman: 0.2
 

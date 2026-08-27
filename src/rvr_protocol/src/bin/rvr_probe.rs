@@ -3,9 +3,9 @@
 //! Useful for confirming the link before bringing ROS into the picture:
 //!
 //! ```text
-//! rvr_probe /dev/ttyAMA0          # wake, read version and battery
-//! rvr_probe /dev/ttyAMA0 stream   # also stream odometry for 5 seconds
-//! rvr_probe /dev/ttyAMA0 drive    # brief nudge forward, then stop
+//! rvr_probe /dev/rvr          # wake, read version and battery
+//! rvr_probe /dev/rvr stream   # also stream odometry for 5 seconds
+//! rvr_probe /dev/rvr drive    # brief nudge forward, then stop
 //! ```
 
 use rvr_protocol::client::Notification;
@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
-    let port = args.next().unwrap_or_else(|| "/dev/ttyAMA0".to_string());
+    let port = args.next().unwrap_or_else(|| "/dev/rvr".to_string());
     let mode = args.next().unwrap_or_else(|| "info".to_string());
 
     println!("opening {port} at 115200...");
